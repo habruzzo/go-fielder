@@ -1,0 +1,6 @@
+github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
+github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME=
+gitlab.com/route/consumer/resolve/clients/modules/merchant_options v0.0.0-20240722220411-717bda280292 h1:+AQ0UtGv8nS3IJE5STFMO4pUCn0sO8dxtGjTbQlFevo=
+gitlab.com/route/consumer/resolve/clients/modules/merchant_options v0.0.0-20240722220411-717bda280292/go.mod h1:74qxFeACzL+F8BHFtzgUPtdDyD8b8VU4IBFXJkZANXE=
+gitlab.com/route/consumer/resolve/lumberjack v0.0.3 h1:sSgbOaj0e/g08q1v8PJaXRn6XsBy5WOIdXaGD1uRg5U=
+gitlab.com/route/consumer/resolve/lumberjack v0.0.3/go.mod h1:d9kAvWJW9KrQ81WFmwtYvJKKPDY5fnpYhm4cPfItOvc=
