@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const FieldKeyTag = "field"
+
 type Parent interface {
 	GetResultItemFieldFromKey(f FieldKey) Field
 	GetFieldTypeFromKey(f FieldKey) reflect.Type
@@ -14,15 +16,96 @@ type Parent interface {
 	CheckKeyExists(f FieldKey) bool
 }
 
-type FieldKey string
+// all of these generic default functions represent a "default" parent
+// a default parent is a struct with tag key "field"
+// and the value of the tag is identical to the name of the item in the struct
+// ex:
+//
+//	type Default struct {
+//		DefaultStringItem `field:"DefaultStringItem"`
+//	}
+func GetResultItemFieldFromKeyDefault[parentValueType any](in parentValueType, f FieldKey) Field {
+	if fieldValue := GetReflectValueOfKeyDefault(in, f); fieldValue.IsZero() || (fieldValue.Interface().(Field)).Key() == FieldKeyNil {
+		return FieldNil
+	} else {
+		return CreateFieldFromType(fieldValue.Type(), fieldValue.Interface(), f)
+	}
+}
 
-const FieldKeyNil FieldKey = "nil"
+func GetReflectValueOfKeyDefault[parentValueType any](in parentValueType, f FieldKey) reflect.Value {
+	itemStructValue := reflect.ValueOf(in)
+	return itemStructValue.FieldByName(string(f.Name))
+}
+
+func CheckKeyExistsDefault[parentValueType any](f FieldKey) bool {
+	keySet := FullKeySet[parentValueType](FieldKeyTag)
+	if !IsFieldKey(f.Name, keySet) {
+		return false
+	}
+	return true
+}
+
+func GetFieldTypeFromKey[parentValueType any](f FieldKey) reflect.Type {
+	if fieldType, ok := reflect.TypeOf(*new(parentValueType)).FieldByName(f.Name.String()); ok {
+		return fieldType.Type
+	} else {
+		return nil
+	}
+}
+
+type FieldKey struct {
+	Name FieldName
+	Tag  string
+}
+
+type FieldValue any
+
+type FieldName string
+
+func (f FieldName) String() string {
+	return string(f)
+}
+
+func NewFieldKey(name string, tag string) FieldKey {
+	if tag == "" {
+		tag = FieldKeyTag
+	}
+	return FieldKey{
+		Name: FieldName(name),
+		Tag:  tag,
+	}
+}
+
+func NewDefaultFieldKey(name string) FieldKey {
+	return FieldKey{
+		Name: FieldName(name),
+		Tag:  FieldKeyTag,
+	}
+}
+
+var FieldKeyNil = NewDefaultFieldKey("nil")
+
+func IsFieldKey(s FieldName, keySet []FieldKey) bool {
+	// we are going to expect that the tags are all the same for one parent
+	return s != "" && len(keySet) > 0 && SliceContains[FieldKey](keySet, NewFieldKey(s.String(), keySet[0].Tag), func(s1, s2 FieldKey) bool {
+		return s1 == s2
+	})
+}
+
+func FullKeySet[inType any](tag string) []FieldKey {
+	keySet := []FieldKey{}
+	reflectType := reflect.TypeOf(*new(inType))
+	for i := 0; i < reflectType.NumField(); i++ {
+		keySet = append(keySet, NewFieldKey(reflectType.Field(i).Tag.Get(tag), tag))
+	}
+	return keySet
+}
 
 var FieldNil = CreateFieldFromType((&EmptyField{}).Type(), nil, FieldKeyNil)
 
 // field interface
 type Field interface {
-	Value() any         // value of the field
+	Value() FieldValue  // value of the field
 	Key() FieldKey      // name of the field
 	Type() reflect.Type // type of field == string, time.Time, decimal.Decimal
 	LessThan(in2 any) bool
@@ -30,14 +113,16 @@ type Field interface {
 	Equal(in2 any) bool
 	ToString() string
 	FromString(st string)
+	SetValue(in2 FieldValue)
+	IsEmpty() bool
 }
 
 type StringField struct {
-	ValueField string
-	KeyField   FieldKey
+	ValueField string   `dynamodbav:"value" json:"value"`
+	KeyField   FieldKey `dynamodbav:"key" json:"key"`
 }
 
-func (s *StringField) Value() any {
+func (s *StringField) Value() FieldValue {
 	return s.ValueField
 }
 
@@ -78,12 +163,26 @@ func (s *StringField) FromString(st string) {
 	s.ValueField = st
 }
 
-type TimeField struct {
-	ValueField time.Time
-	KeyField   FieldKey
+func (s *StringField) SetValue(in2 FieldValue) {
+	if out := checkAndDoSafeCompare(s, in2, EQ); out != nil {
+		f := in2.(Field)
+		s.ValueField = f.ToString()
+		return
+	}
+	s.ValueField = in2.(*StringField).ValueField
+	return
 }
 
-func (s *TimeField) Value() any {
+func (s *StringField) IsEmpty() bool {
+	return s.ValueField == ""
+}
+
+type TimeField struct {
+	ValueField time.Time `dynamodbav:"value" json:"value"`
+	KeyField   FieldKey  `dynamodbav:"key" json:"key"`
+}
+
+func (s *TimeField) Value() FieldValue {
 	return s.ValueField
 }
 
@@ -128,12 +227,26 @@ func (s *TimeField) FromString(st string) {
 	s.ValueField = t
 }
 
-type DecimalField struct {
-	ValueField decimal.Decimal
-	KeyField   FieldKey
+func (s *TimeField) SetValue(in2 FieldValue) {
+	if out := checkAndDoSafeCompare(s, in2, EQ); out != nil {
+		f := in2.(Field)
+		s.FromString(f.ToString())
+		return
+	}
+	s.ValueField = in2.(*TimeField).ValueField
+	return
 }
 
-func (s *DecimalField) Value() any {
+func (s *TimeField) IsEmpty() bool {
+	return s.ValueField.IsZero()
+}
+
+type DecimalField struct {
+	ValueField decimal.Decimal `dynamodbav:"value" json:"value"`
+	KeyField   FieldKey        `dynamodbav:"key" json:"key"`
+}
+
+func (s *DecimalField) Value() FieldValue {
 	return s.ValueField
 }
 
@@ -178,12 +291,26 @@ func (s *DecimalField) FromString(st string) {
 	s.ValueField = d
 }
 
-type IntegerField struct {
-	ValueField int
-	KeyField   FieldKey
+func (s *DecimalField) SetValue(in2 FieldValue) {
+	if out := checkAndDoSafeCompare(s, in2, EQ); out != nil {
+		f := in2.(Field)
+		s.FromString(f.ToString())
+		return
+	}
+	s.ValueField = in2.(*DecimalField).ValueField
+	return
 }
 
-func (s *IntegerField) Value() any {
+func (s *DecimalField) IsEmpty() bool {
+	return s.ValueField.IsZero()
+}
+
+type IntegerField struct {
+	ValueField int      `dynamodbav:"value" json:"value"`
+	KeyField   FieldKey `dynamodbav:"key" json:"key"`
+}
+
+func (s *IntegerField) Value() FieldValue {
 	return s.ValueField
 }
 
@@ -228,12 +355,51 @@ func (s *IntegerField) FromString(st string) {
 	s.ValueField = it
 }
 
-type BoolField struct {
-	ValueField bool
-	KeyField   FieldKey
+func (s *IntegerField) SetValue(in2 FieldValue) {
+	if out := checkAndDoSafeCompare(s, in2, EQ); out != nil {
+		f := in2.(Field)
+		s.FromString(f.ToString())
+		return
+	}
+	s.ValueField = in2.(*IntegerField).ValueField
+	return
+}
+func (s *IntegerField) IsEmpty() bool {
+	return s.ValueField == 0
 }
 
-func (s *BoolField) Value() any {
+type BoolField struct {
+	ValueField bool     `dynamodbav:"value" json:"value"`
+	KeyField   FieldKey `dynamodbav:"key" json:"key"`
+	Set        bool     `dynamodbav:"bool_set" json:"bool_set"`
+}
+
+func NewBool(key FieldKey, b bool) Field {
+	return &BoolField{
+		ValueField: b,
+		KeyField:   key,
+		Set:        true,
+	}
+}
+
+func NewBoolEmpty(key FieldKey) Field {
+	return &BoolField{
+		KeyField: key,
+		Set:      false,
+	}
+}
+
+func (s *BoolField) InitTrue() {
+	s.ValueField = true
+	s.Set = true
+}
+
+func (s *BoolField) InitFalse() {
+	s.ValueField = true
+	s.Set = true
+}
+
+func (s *BoolField) Value() FieldValue {
 	return s.ValueField
 }
 
@@ -270,14 +436,30 @@ func (s *BoolField) FromString(st string) {
 	if err != nil {
 		s.ValueField = false
 	}
+	s.Set = true
 	s.ValueField = it
+}
+
+func (s *BoolField) SetValue(in2 FieldValue) {
+	if out := checkAndDoSafeCompare(s, in2, EQ); out != nil {
+		f := in2.(Field)
+		s.FromString(f.ToString())
+		return
+	}
+	s.Set = true
+	s.ValueField = in2.(*BoolField).ValueField
+	return
+}
+
+func (s *BoolField) IsEmpty() bool {
+	return s.Set
 }
 
 type EmptyField struct {
 	KeyField FieldKey
 }
 
-func (s *EmptyField) Value() any {
+func (s *EmptyField) Value() FieldValue {
 	return nil
 }
 
@@ -314,22 +496,17 @@ func (s *EmptyField) ToString() string {
 }
 
 func (s *EmptyField) FromString(st string) {
-	s.KeyField = FieldKey(st)
-}
-
-func IsFieldKey(s string, keySet []FieldKey) bool {
-	return s != "" && SliceContains[FieldKey](keySet, FieldKey(s), func(s1, s2 FieldKey) bool {
-		return s1 == s2
-	})
-}
-
-func FullKeySet[inType any](tag string) []FieldKey {
-	keySet := []FieldKey{}
-	reflectType := reflect.TypeOf(*new(inType))
-	for i := 0; i < reflectType.NumField(); i++ {
-		keySet = append(keySet, FieldKey(reflectType.Field(i).Tag.Get(tag)))
+	s.KeyField = FieldKey{
+		Name: FieldName(st),
 	}
-	return keySet
+}
+
+func (s *EmptyField) SetValue(in2 FieldValue) {
+	return
+}
+
+func (s *EmptyField) IsEmpty() bool {
+	return true
 }
 
 func CreateFieldFromType(ty reflect.Type, va any, fk FieldKey) Field {
