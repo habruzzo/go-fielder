@@ -8,18 +8,27 @@ type ConditionalField interface {
 type Prerequisite struct {
 	// function that determines if we should apply the checks
 	IsCandidate Enforceable
-	// set of required functions to
+	// set of required functions to run
 	Gauntlet []Question
 }
 
-type Enforceable func(f Field) bool
+type Enforceable func(f any) bool
+
+var (
+	EnforceableTrue = func(f any) bool {
+		return true
+	}
+	EnforceableFalse = func(f any) bool {
+		return false
+	}
+)
 
 type Question func() Enforceable
 
 type Conditional interface {
 	// returns the set of keys and values that have to be present for the new field to be set
 	Prerequisites() []Prerequisite
-	Meets(Field) bool
+	Meets(any) bool
 }
 
 type conditional struct {
@@ -34,7 +43,7 @@ func (c *conditional) Prerequisites() []Prerequisite {
 	return c.prereqs
 }
 
-func (c *conditional) Meets(toSet Field) bool {
+func (c *conditional) Meets(toSet any) bool {
 	for _, v := range c.prereqs {
 		// if its a candidate for this prerequisite, then we test
 		if v.IsCandidate(toSet) {
@@ -66,7 +75,7 @@ func (s *FieldConditional) SetValue(intendedToSet FieldValue) {
 	// first we do the safety check and convert to a field
 	fieldIntended := intendedToSet.(Field)
 	if s.Conditional.Meets(fieldIntended) {
-		s.SetValue(fieldIntended)
+		s.Field.SetValue(fieldIntended)
 		return
 	}
 	return
