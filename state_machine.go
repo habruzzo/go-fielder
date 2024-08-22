@@ -23,6 +23,8 @@ type RingAddress *ring.Ring
 
 type StateId string
 
+var SameStateNoUpdate = errors.New("state has no transition, is terminal, no update")
+
 // the state id represents how states refer to each other
 
 type StateMachine struct {
@@ -63,7 +65,6 @@ func (sm *StateMachine) ProcessInMachine(in StateValue, testData any, equals fun
 	if !ok {
 		return nil, errors.New("error retrieving state")
 	}
-	//
 	nextId, err := currentState.EvaluateTransition(testData)
 	if err != nil {
 		return nil, err
@@ -73,7 +74,7 @@ func (sm *StateMachine) ProcessInMachine(in StateValue, testData any, equals fun
 	}
 	if nextId == stateId {
 		// we havent switched states, return the same
-		return in, nil
+		return nil, SameStateNoUpdate
 	}
 
 	value, ok := sm.ValueCache[nextId]
