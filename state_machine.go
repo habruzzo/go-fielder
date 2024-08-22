@@ -71,6 +71,10 @@ func (sm *StateMachine) ProcessInMachine(in StateValue, testData any, equals fun
 	if nextId == "" {
 		return nil, errors.New("next id is empty")
 	}
+	if nextId == stateId {
+		// we havent switched states, return the same
+		return in, nil
+	}
 
 	value, ok := sm.ValueCache[nextId]
 	if !ok {
@@ -115,9 +119,13 @@ type State struct {
 	Matches    []Transition // the different transitions from this current state
 	StateValue              // what is the value at this state?
 	Start      bool         // is this the start state for the machine?
+	Terminal   bool         // is this an end state for the machine? (no more transitions are needed)
 }
 
 func (s *State) EvaluateTransition(dataToTest any) (StateId, error) {
+	if s.Terminal {
+		return s.Id, nil
+	}
 	for _, v := range s.Matches {
 		if v.SimpleMatcher(dataToTest) {
 			return v.NextState, nil
