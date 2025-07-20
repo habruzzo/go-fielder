@@ -147,3 +147,15 @@ type SimpleMatcher func(inputToMatch any) bool
 func BasicEquals(s1, s2 StateValue) bool {
 	return s1 == s2
 }
+
+func NextBehavior[inputType any, behaviorType any](sm *StateMachine, currentStatus StateValue, dataToTest inputType, mapper map[StateValue]behaviorType) (StateValue, behaviorType, error) {
+	nextValue, err := sm.ProcessInMachine(currentStatus, dataToTest, BasicEquals)
+	if err != nil {
+		return "", *new(behaviorType), err
+	}
+	behavior, ok := mapper[nextValue]
+	if !ok {
+		return "", *new(behaviorType), errors.New("no mapped behavior available for state value")
+	}
+	return nextValue, behavior, nil
+}

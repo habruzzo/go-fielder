@@ -94,13 +94,16 @@ state := ExampleParent{Grass: true, Green: true, HasColor: false,}
 we want to change "has color" to true
 HasColor is a ConditionalField , the field inside is specifically a BoolField, with BoolField{Key:"HasColor", value: false, set: true,}
 the Conditional is defined to protect the inner BoolField from being in a bad state. if we want to change the BoolField, we have to pass the Questions in the Conditional
+
 a ConditionalField is a field, so its value can be set by calling SetValue
 we will override SetValue and make it validate the conditional first, and pass any checks that are needed, if we can, then we set the value
-we want to set that field to true, so we will attempt the conditional. you can see inside "SetValue" we call "Meets" which runs through the functions to do an analysis of the parent and the intended outcome
+
+in this case we want to set that field to true, so we will attempt the conditional. you can see inside "SetValue" we call "Meets" which runs through the functions to do an analysis of the parent and the intended outcome
 to set the field, we must pass all the criteria in the gauntlet, and we need to define our gauntlet for "HasColor" field
+
 if we want to set HasColor to true, then Green should also be true. if we can only detect the color green, then for something to have color,
 it has to be green. so if we want to set HasColor, we need to check that Green is true
-the example prerequisite shows one of the tests in th
+
 the example gauntlet item is a representation of a question we will ask to see if we can set the new value
 */
 

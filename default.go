@@ -9,6 +9,7 @@ type FieldWDefault interface {
 type Default interface {
 	ExplicitlySet() bool
 	MatchesDefault(Field) bool
+	DefaultField() Field
 }
 
 func NewDefault(explicitly bool, f Field) Default {
@@ -29,6 +30,10 @@ func (d *defaulter) ExplicitlySet() bool {
 
 func (d *defaulter) MatchesDefault(f Field) bool {
 	return d.Value.Equal(f)
+}
+
+func (d *defaulter) DefaultField() Field {
+	return d.Value
 }
 
 type FieldWDefaultImpl struct {
