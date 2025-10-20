@@ -1,4 +1,4 @@
-module gitlab.com/route/consumer/resolve/modules/fielder
+module github.com/habruzzo/go-fielder
 
 go 1.22
 
